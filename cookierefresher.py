@@ -138,18 +138,39 @@ def redeem_auth_ticket(auth_ticket: str) -> Dict[str, Any]:
         
         set_cookie_header = response.headers.get('set-cookie', '')
         
-        cookie_pattern = r'(_\|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.\|_[A-Za-z0-9]+)'
+        cookie_pattern = r'(_\|WARNING:-DO-NOT-SHARE-THIS\.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items\.\|_[^;,\s]+)'
         cookie_match = re.search(cookie_pattern, set_cookie_header)
         
         if not cookie_match:
-            print_error("Failed to extract cookie from response")
+            cookie_pattern_alt = r'\.ROBLOSECURITY=([^;,\s]+)'
+            cookie_match = re.search(cookie_pattern_alt, set_cookie_header)
+            if cookie_match:
+                new_cookie = cookie_match.group(1)
+            else:
+                cookie_parts = set_cookie_header.split('.ROBLOSECURITY=')
+                if len(cookie_parts) > 1:
+                    cookie_value = cookie_parts[1].split(';')[0].split(',')[0].strip()
+                    new_cookie = cookie_value
+                else:
+                    print_error("Failed to extract cookie from response")
+                    print_info(f"Set-Cookie Header: {set_cookie_header[:200]}...")
+                    return {
+                        "success": False,
+                        "error": "Failed to get cookie"
+                    }
+        else:
+            new_cookie = cookie_match.group(1)
+        
+        if not new_cookie or len(new_cookie) < 50:  
+            print_error(f"Extracted cookie seems too short: {len(new_cookie)} characters")
+            print_info(f"Cookie preview: {new_cookie[:50]}...")
             return {
                 "success": False,
-                "error": "Failed to get cookie"
+                "error": "Extracted cookie appears incomplete"
             }
         
-        new_cookie = cookie_match.group(1)
         print_success("Cookie refreshed successfully!")
+        print_info(f"New cookie length: {len(new_cookie)} characters")
         
         return {
             "success": True,
